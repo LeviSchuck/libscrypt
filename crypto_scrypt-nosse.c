@@ -36,7 +36,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "sha256.h"
+#include "mbedtls/md.h"
+#include "mbedtls/pkcs5.h"
 #include "sysendian.h"
 
 #include "libscrypt.h"
@@ -230,16 +231,23 @@ smix(uint8_t * B, size_t r, uint64_t N, uint32_t * V, uint32_t * XY)
  *
  * Return 0 on success; or -1 on error
  */
-int
-libscrypt_scrypt(const uint8_t * passwd, size_t passwdlen,
-    const uint8_t * salt, size_t saltlen, uint64_t N, uint32_t r, uint32_t p,
-    uint8_t * buf, size_t buflen)
+int libscrypt_scrypt(
+	const uint8_t * passwd, size_t passwdlen,
+	const uint8_t * salt, size_t saltlen,
+	uint64_t N, uint32_t r, uint32_t p,
+	uint8_t * buf, size_t buflen)
 {
 	void * B0, * V0, * XY0;
 	uint8_t * B;
 	uint32_t * V;
 	uint32_t * XY;
 	uint32_t i;
+	int ret = 0;
+
+	const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+	mbedtls_md_context_t md_ctx;
+	mbedtls_md_init(&md_ctx);
+  mbedtls_md_setup(&md_ctx, md_info, 1);
 
 	/* Sanity-check parameters. */
 #if SIZE_MAX > UINT32_MAX
@@ -308,7 +316,15 @@ libscrypt_scrypt(const uint8_t * passwd, size_t passwdlen,
 #endif
 
 	/* 1: (B_0 ... B_{p-1}) <-- PBKDF2(P, S, 1, p * MFLen) */
-	libscrypt_PBKDF2_SHA256(passwd, passwdlen, salt, saltlen, 1, B, p * 128 * r);
+	ret = mbedtls_pkcs5_pbkdf2_hmac(
+    &md_ctx,
+    passwd, passwdlen,
+    salt, saltlen,
+    1,
+    p * 128 * r, B);
+	if (ret != 0) {
+		goto err2;
+	}
 
 	/* 2: for i = 0 to p - 1 do */
 	for (i = 0; i < p; i++) {
@@ -317,7 +333,15 @@ libscrypt_scrypt(const uint8_t * passwd, size_t passwdlen,
 	}
 
 	/* 5: DK <-- PBKDF2(P, B, 1, dkLen) */
-	libscrypt_PBKDF2_SHA256(passwd, passwdlen, B, p * 128 * r, 1, buf, buflen);
+	ret = mbedtls_pkcs5_pbkdf2_hmac(
+    &md_ctx,
+    passwd, passwdlen,
+    B, p * 128 * r,
+    1,
+    buflen, buf);
+	if (ret != 0) {
+		goto err2;
+	}
 
 	/* Free memory. */
 #ifdef MAP_ANON
@@ -328,6 +352,7 @@ libscrypt_scrypt(const uint8_t * passwd, size_t passwdlen,
 #endif
 	free(XY0);
 	free(B0);
+	mbedtls_md_free(&md_ctx);
 
 	/* Success! */
 	return (0);
@@ -337,6 +362,7 @@ err2:
 err1:
 	free(B0);
 err0:
+	mbedtls_md_free(&md_ctx);
 	/* Failure! */
 	return (-1);
 }

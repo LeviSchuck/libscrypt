@@ -26,38 +26,25 @@ extern "C"{
  * standard unless you want to modify the CPU/RAM ratio.
  * Return 0 on success; or -1 on error.
  */
-int libscrypt_scrypt(const uint8_t *, size_t, const uint8_t *, size_t, uint64_t,
-    uint32_t, uint32_t, /*@out@*/ uint8_t *, size_t);
-
-/* Converts a series of input parameters to a MCF form for storage */
-int libscrypt_mcf(uint32_t N, uint32_t r, uint32_t p, const char *salt,
-	const char *hash, char *mcf);
-
-#ifndef _MSC_VER
-/* Generates a salt. Uses /dev/urandom/
- */
-int libscrypt_salt_gen(/*@out@*/ uint8_t *rand, size_t len);
-
-/* Creates a hash of a passphrase using a randomly generated salt */
-/* Returns >0 on success, or 0 for fail */
-int libscrypt_hash(char *dst, const char* passphrase, uint32_t N, uint8_t r,
-  uint8_t p);
-#endif
-
-/* Checks a given MCF against a password */
-int libscrypt_check(char *mcf, const char *password);
+int libscrypt_scrypt(
+	const uint8_t * passwd, size_t passwdlen,
+	const uint8_t * salt, size_t saltlen,
+	uint64_t N, uint32_t r, uint32_t p,
+	uint8_t * buf, size_t buflen);
 
 #ifdef __cplusplus
 }
 #endif
 
 /* Sane default values */
-#define SCRYPT_HASH_LEN 64 /* This can be user defined - 
+#define SCRYPT_HASH_LEN 64
+/* This can be user defined - 
  *but 64 is the reference size
  */
-#define SCRYPT_SAFE_N 30 /* This is much higher than you want. It's just
-			  * a blocker for insane defines
-			  */
+#define SCRYPT_SAFE_N 30
+/* This is much higher than you want. It's just
+ * a blocker for insane defines
+ */
 #define SCRYPT_SALT_LEN 16 /* This is just a recommended size */
 /* Standard MCF is:
    $s1 Identifier, three chars
